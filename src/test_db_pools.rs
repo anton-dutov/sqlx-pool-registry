@@ -3,15 +3,22 @@ use crate::{
     sqlx::{self, PgPool},
 };
 
-/// Test pool provider with read-only replica enforcement.
+/// Test pool provider with a replica that is read-only by default.
 ///
 /// This creates two separate connection pools from the same database:
 /// - Primary pool for writes (normal permissions)
-/// - Replica pool for reads (enforces `default_transaction_read_only = on`)
+/// - Replica pool for reads (sets `default_transaction_read_only = on`)
 ///
-/// This ensures tests catch bugs where write operations are incorrectly
-/// routed through `.read()`. PostgreSQL will reject writes with:
+/// This helps tests catch bugs where ordinary write operations are incorrectly
+/// routed through `.read()`. PostgreSQL will reject writes to non-temporary
+/// tables by default with errors such as:
 /// "cannot execute INSERT/UPDATE/DELETE in a read-only transaction"
+///
+/// This helper is not a security boundary. A client can override the default
+/// for an individual transaction or session, and PostgreSQL read-only
+/// transactions do not prohibit every possible write. See PostgreSQL's
+/// [`SET TRANSACTION`](https://www.postgresql.org/docs/current/sql-set-transaction.html)
+/// documentation for the exact restrictions.
 ///
 /// # Usage with `#[sqlx::test]`
 ///
@@ -47,7 +54,8 @@ use crate::{
 ///
 /// Without this test helper, you might accidentally route write operations through
 /// `.read()` and not catch the bug until production when you have an actual replica
-/// with replication lag. This helper makes the bug obvious immediately in tests.
+/// with replication lag. This helper makes ordinary routing mistakes easier to
+/// detect in tests.
 ///
 /// # Example
 ///
@@ -102,10 +110,11 @@ impl TestDbPools {
     ///
     /// This creates:
     /// - A primary pool (clone of input) for writes
-    /// - A replica pool (new connection) configured as read-only
+    /// - A replica pool (new connection) configured as read-only by default
     ///
-    /// The replica pool enforces `default_transaction_read_only = on`,
-    /// so any write operations will fail with a PostgreSQL error.
+    /// The replica pool sets `default_transaction_read_only = on`, so ordinary
+    /// writes to non-temporary tables fail unless the client overrides that
+    /// default. This is a testing aid, not an authorization mechanism.
     ///
     /// # Example
     ///
@@ -116,7 +125,7 @@ impl TestDbPools {
     /// # async fn example(pool: PgPool) -> Result<(), sqlx::Error> {
     /// let pools = TestDbPools::new(pool).await?;
     ///
-    /// // Now you have pools that enforce read/write separation
+    /// // Now ordinary write-through-read mistakes fail during tests
     /// # Ok(())
     /// # }
     /// ```
@@ -125,7 +134,7 @@ impl TestDbPools {
 
         let primary = pool.clone();
 
-        // Create a separate pool with read-only enforcement
+        // Create a separate pool that is read-only by default
         let replica = PgPoolOptions::new()
             .max_connections(pool.options().get_max_connections())
             .after_connect(|conn, _meta| {

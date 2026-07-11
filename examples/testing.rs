@@ -1,7 +1,7 @@
 //! Example demonstrating how to use TestDbPools for testing.
 //!
-//! This example shows how TestDbPools enforces read/write separation
-//! in your tests, catching routing bugs immediately.
+//! This example shows how TestDbPools uses PostgreSQL's read-only default
+//! to help catch ordinary routing bugs in tests.
 //!
 //! To run this example:
 //! 1. Set DATABASE_URL environment variable
@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Creating TestDbPools...");
     let pools = TestDbPools::new(pool).await?;
 
-    println!("✓ TestDbPools created (read pool is read-only)");
+    println!("✓ TestDbPools created (read pool is read-only by default)");
     println!();
 
     // Set up test table
@@ -111,10 +111,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match result {
         Ok(_) => {
             println!("   ✗ UNEXPECTED: Write succeeded on read pool!");
-            println!("   This should have failed - the read pool should be read-only");
+            println!("   This should have failed - the read pool is read-only by default");
         }
         Err(e) => {
-            println!("   ✓ Write correctly rejected on read pool");
+            println!("   ✓ Write correctly rejected on read pool by default");
             println!("   Error: {}", e);
             assert!(
                 e.to_string().contains("read-only") || e.to_string().contains("cannot execute")
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   ✗ UNEXPECTED: DDL succeeded on read pool!");
         }
         Err(e) => {
-            println!("   ✓ DDL correctly rejected on read pool");
+            println!("   ✓ DDL correctly rejected on read pool by default");
             println!("   Error: {}", e);
         }
     }
@@ -151,8 +151,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ All tests passed!");
     println!();
     println!("💡 Key Takeaways:");
-    println!("   - TestDbPools enforces read/write separation in tests");
-    println!("   - Write operations through .read() fail immediately");
+    println!("   - TestDbPools helps detect read/write routing mistakes in tests");
+    println!("   - Ordinary writes through .read() fail by default");
     println!("   - Catches routing bugs before they reach production");
     println!("   - Works seamlessly with #[sqlx::test] macro");
     println!();

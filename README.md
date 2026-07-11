@@ -2,7 +2,7 @@
 
 Forked from [doublewordai/sqlx-pool-router](https://github.com/doublewordai/sqlx-pool-router).
 
-[![Crates.io](https://img.shields.io/crates/v/sqlx-pool-router.svg)](https://crates.io/crates/sqlx-pool-router) [![Documentation](https://docs.rs/sqlx-pool-router/badge.svg)](https://docs.rs/sqlx-pool-router) [![License](https://img.shields.io/crates/l/sqlx-pool-router.svg)](https://github.com/doublewordai/sqlx-pool-router#license)
+[![Crates.io](https://img.shields.io/crates/v/sqlx-pool-registry.svg)](https://crates.io/crates/sqlx-pool-registry) [![Documentation](https://docs.rs/sqlx-pool-registry/badge.svg)](https://docs.rs/sqlx-pool-registry) [![License](https://img.shields.io/crates/l/sqlx-pool-registry.svg)](https://github.com/anton-dutov/sqlx-pool-registry#license)
 
 A lightweight Rust library for routing database operations to different SQLx PostgreSQL connection pools based on whether they're read or write operations.
 
@@ -11,7 +11,7 @@ This enables load distribution by routing read-heavy operations to read replicas
 ## Features
 
 - **Zero-cost abstraction**: Trait-based design with no runtime overhead
-- **Type-safe routing**: Compile-time guarantees for read/write pool separation
+- **Explicit routing**: Read/write intent stays visible at each database call site
 - **Backward compatible**: `PgPool` implements `PoolProvider` for seamless integration
 - **Flexible**: Use single pool or separate primary/replica pools
 - **SQLx compatibility**: Select SQLx 0.8 (default) or SQLx 0.9 at compile time
@@ -36,10 +36,7 @@ sqlx-pool-registry = { version = "0.2.1", default-features = false, features = [
 sqlx = { version = "0.9", features = ["postgres", "runtime-tokio"] }
 ```
 
-Exactly one of `with-sqlx-0_8` and `with-sqlx-0_9` must be enabled. The
-selected SQLx crate is also available as `sqlx_pool_registry::sqlx`. Add
-`with-named-pools` to either configuration to enable `PoolRegistry`. The
-effective minimum Rust version is 1.78 with SQLx 0.8 and 1.94 with SQLx 0.9.
+Exactly one of `with-sqlx-0_8` and `with-sqlx-0_9` must be enabled. The selected SQLx crate is also available as `sqlx_pool_registry::sqlx`. Add `with-named-pools` to either configuration to enable `PoolRegistry`. The effective minimum Rust version is 1.94 with SQLx 0.8 and 1.94 with SQLx 0.9.
 
 ## Quick Start
 
@@ -141,7 +138,7 @@ Use `try_get()` in functions returning `Result`; `get()` returns `Option` for op
 
 ## Testing with `TestDbPools`
 
-The crate includes a `TestDbPools` helper for use with `#[sqlx::test]` that enforces read/write separation in your tests:
+The crate includes a `TestDbPools` helper for use with `#[sqlx::test]` that makes ordinary write-through-read routing mistakes fail during tests:
 
 ``` rust
 use sqlx::PgPool;
@@ -149,10 +146,10 @@ use sqlx_pool_registry::{PoolProvider, TestDbPools};
 
 #[sqlx::test]
 async fn test_repository(pool: PgPool) {
-    // TestDbPools creates a read-only replica from the same database
+    // TestDbPools creates a replica that is read-only by default
     let pools = TestDbPools::new(pool).await.unwrap();
 
-    // Writes through .read() will FAIL - catches bugs immediately!
+    // Ordinary writes through .read() fail unless read-only mode is overridden
     let result = sqlx::query("INSERT INTO users (name) VALUES ('Alice')")
         .execute(pools.read())
         .await;
@@ -168,10 +165,16 @@ async fn test_repository(pool: PgPool) {
 
 **Why use `TestDbPools`?**
 
-- Catches routing bugs immediately in tests
+- Helps catch routing bugs immediately in tests
 - No need for an actual replica database in test environment
-- Enforces `default_transaction_read_only = on` on the read pool
-- PostgreSQL will reject any write operations on `.read()`
+- Sets `default_transaction_read_only = on` on each read-pool connection
+- PostgreSQL rejects writes to non-temporary tables by default
+
+`TestDbPools` is a testing aid, not a security boundary. PostgreSQL clients can
+override the default for an individual transaction or session, and read-only
+transactions do not prohibit every possible write. See PostgreSQL's
+[`SET TRANSACTION`](https://www.postgresql.org/docs/current/sql-set-transaction.html)
+documentation for the exact restrictions.
 
 ## Generic Programming
 
@@ -263,9 +266,7 @@ at your option.
 
 ## Running Tests
 
-The default test suite is offline: it does not require PostgreSQL or
-`DATABASE_URL`. Database-dependent tests are explicitly ignored, so both SQLx
-configurations can be checked with:
+The default test suite is offline: it does not require PostgreSQL or `DATABASE_URL`. Database-dependent tests are explicitly ignored, so both SQLx configurations can be checked with:
 
 ``` bash
 unset DATABASE_URL
@@ -273,8 +274,7 @@ cargo test --features with-named-pools
 cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
 ```
 
-To run only the database-dependent tests, start PostgreSQL and set
-`DATABASE_URL` explicitly:
+To run only the database-dependent tests, start PostgreSQL and set `DATABASE_URL` explicitly:
 
 ``` bash
 # Start PostgreSQL (using Docker)
@@ -297,11 +297,7 @@ docker stop sqlx-pool-registry-test-db
 docker rm sqlx-pool-registry-test-db
 ```
 
-For the release-equivalent full suite, replace `-- --ignored` with
-`-- --include-ignored`. The database tests use `#[sqlx::test]`, which creates
-isolated test databases; this is why the role in `DATABASE_URL` needs
-`CREATE DATABASE`. An unset URL is fine for the default suite, while an unset or
-unreachable URL makes an explicit database-test run fail.
+For the release-equivalent full suite, replace `-- --ignored` with `-- --include-ignored`. The database tests use `#[sqlx::test]`, which creates isolated test databases; this is why the role in `DATABASE_URL` needs `CREATE DATABASE`. An unset URL is fine for the default suite, while an unset or unreachable URL makes an explicit database-test run fail.
 
 ## Contributing
 

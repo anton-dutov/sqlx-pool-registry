@@ -62,8 +62,8 @@ pub trait PoolProvider: Clone + Send + Sync + 'static {
 
     /// Get a pool for write operations.
     ///
-    /// Should always return the primary pool to ensure ACID guarantees
-    /// and read-after-write consistency.
+    /// Should return the primary pool for operations that require writes,
+    /// locking reads, or read-after-write consistency.
     fn write(&self) -> &PgPool;
 }
 

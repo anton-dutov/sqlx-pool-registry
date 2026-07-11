@@ -9,7 +9,7 @@
 //! ## Features
 //!
 //! - **Zero-cost abstraction**: Trait-based design with no runtime overhead
-//! - **Type-safe routing**: Compile-time guarantees for read/write pool separation
+//! - **Explicit routing**: Read/write intent stays visible at each database call site
 //! - **Backward compatible**: `PgPool` implements `PoolProvider` for seamless integration
 //! - **Flexible**: Use single pool or separate primary/replica pools
 //! - **SQLx compatibility**: `with-sqlx-0_8` is enabled by default; select
@@ -126,7 +126,8 @@
 //!
 //! ## Testing
 //!
-//! Use [`TestDbPools`] with `#[sqlx::test]` to enforce read/write separation in tests:
+//! Use [`TestDbPools`] with `#[sqlx::test]` to make ordinary write-through-read
+//! routing mistakes fail during tests:
 //!
 //! ```rust,no_run
 //! use sqlx_pool_registry::sqlx::{self, PgPool};
@@ -136,7 +137,7 @@
 //! async fn test_repository(pool: PgPool) {
 //!     let pools = TestDbPools::new(pool).await.unwrap();
 //!
-//!     // Write operations through .read() will FAIL
+//!     // Ordinary writes through .read() fail unless read-only mode is overridden
 //!     let result = sqlx::query("INSERT INTO users VALUES (1)")
 //!         .execute(pools.read())
 //!         .await;
@@ -144,7 +145,9 @@
 //! }
 //! ```
 //!
-//! This catches routing bugs immediately without needing a real replica database.
+//! This helps catch routing bugs without needing a real replica database.
+//! `TestDbPools` is a testing aid, not a security boundary: clients can override
+//! PostgreSQL's read-only default for an individual transaction or session.
 
 #[cfg(all(feature = "with-sqlx-0_8", feature = "with-sqlx-0_9"))]
 compile_error!("features `with-sqlx-0_8` and `with-sqlx-0_9` are mutually exclusive");
