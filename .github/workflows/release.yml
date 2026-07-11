@@ -7,8 +7,11 @@ on:
 
 jobs:
   test:
-    name: Test before publish
+    name: Test before publish (${{ matrix.sqlx_feature }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sqlx_feature: [with-sqlx-0_8, with-sqlx-0_9]
 
     services:
       postgres:
@@ -38,18 +41,18 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-release-${{ matrix.sqlx_feature }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/test
-        run: cargo test --all-features --verbose
+        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
 
       - name: Check formatting
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-features -- -D warnings
+        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- -D warnings
 
   publish:
     name: Publish to crates.io

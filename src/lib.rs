@@ -12,6 +12,10 @@
 //! - **Type-safe routing**: Compile-time guarantees for read/write pool separation
 //! - **Backward compatible**: `PgPool` implements `PoolProvider` for seamless integration
 //! - **Flexible**: Use single pool or separate primary/replica pools
+//! - **SQLx compatibility**: `with-sqlx-0_8` is enabled by default; select
+//!   `with-sqlx-0_9` with default features disabled to use SQLx 0.9. Exactly
+//!   one SQLx compatibility feature must be enabled. The selected crate is
+//!   re-exported as [`sqlx`].
 //! - **Named pools (optional)**: Group independent providers by name with the
 //!   `with-named-pools` feature
 //! - **Test helpers**: [`TestDbPools`] for testing with `#[sqlx::test]`
@@ -22,7 +26,7 @@
 //! ### Single Pool (Development)
 //!
 //! ```rust,no_run
-//! use sqlx::PgPool;
+//! use sqlx_pool_registry::sqlx::{self, PgPool};
 //! use sqlx_pool_registry::PoolProvider;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,7 +43,7 @@
 //! ### Read/Write Separation (Production)
 //!
 //! ```rust,no_run
-//! use sqlx::postgres::PgPoolOptions;
+//! use sqlx_pool_registry::sqlx::{self, postgres::PgPoolOptions};
 //! use sqlx_pool_registry::{DbPools, PoolProvider};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -95,7 +99,7 @@
 //! Make your types generic over `PoolProvider` to support both single and multi-pool configurations:
 //!
 //! ```rust
-//! use sqlx_pool_registry::PoolProvider;
+//! use sqlx_pool_registry::{sqlx, PoolProvider};
 //!
 //! struct Repository<P: PoolProvider> {
 //!     pools: P,
@@ -125,7 +129,7 @@
 //! Use [`TestDbPools`] with `#[sqlx::test]` to enforce read/write separation in tests:
 //!
 //! ```rust,no_run
-//! use sqlx::PgPool;
+//! use sqlx_pool_registry::sqlx::{self, PgPool};
 //! use sqlx_pool_registry::{PoolProvider, TestDbPools};
 //!
 //! #[sqlx::test]
@@ -142,7 +146,19 @@
 //!
 //! This catches routing bugs immediately without needing a real replica database.
 
-use sqlx::PgPool;
+#[cfg(all(feature = "with-sqlx-0_8", feature = "with-sqlx-0_9"))]
+compile_error!("features `with-sqlx-0_8` and `with-sqlx-0_9` are mutually exclusive");
+
+#[cfg(not(any(feature = "with-sqlx-0_8", feature = "with-sqlx-0_9")))]
+compile_error!("enable exactly one SQLx feature: `with-sqlx-0_8` or `with-sqlx-0_9`");
+
+#[cfg(all(feature = "with-sqlx-0_8", not(feature = "with-sqlx-0_9")))]
+pub extern crate sqlx_0_8 as sqlx;
+
+#[cfg(all(feature = "with-sqlx-0_9", not(feature = "with-sqlx-0_8")))]
+pub extern crate sqlx_0_9 as sqlx;
+
+use crate::sqlx::PgPool;
 #[cfg(feature = "with-named-pools")]
 use std::collections::HashMap;
 #[cfg(feature = "with-named-pools")]
@@ -185,7 +201,7 @@ use std::ops::Deref;
 /// # Example Implementation
 ///
 /// ```
-/// use sqlx::PgPool;
+/// use sqlx_pool_registry::sqlx::{self, PgPool};
 /// use sqlx_pool_registry::PoolProvider;
 ///
 /// #[derive(Clone)]
@@ -229,7 +245,7 @@ pub trait PoolProvider: Clone + Send + Sync + 'static {
 /// ## Single Pool Configuration
 ///
 /// ```rust,no_run
-/// use sqlx::PgPool;
+/// use sqlx_pool_registry::sqlx::{self, PgPool};
 /// use sqlx_pool_registry::DbPools;
 ///
 /// # async fn example() -> Result<(), sqlx::Error> {
@@ -245,7 +261,7 @@ pub trait PoolProvider: Clone + Send + Sync + 'static {
 /// ## Primary/Replica Configuration
 ///
 /// ```rust,no_run
-/// use sqlx::postgres::PgPoolOptions;
+/// use sqlx_pool_registry::sqlx::{self, postgres::PgPoolOptions};
 /// use sqlx_pool_registry::DbPools;
 ///
 /// # async fn example() -> Result<(), sqlx::Error> {
@@ -279,7 +295,7 @@ impl DbPools {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use sqlx::PgPool;
+    /// use sqlx_pool_registry::sqlx::{self, PgPool};
     /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
@@ -303,7 +319,7 @@ impl DbPools {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use sqlx::postgres::PgPoolOptions;
+    /// use sqlx_pool_registry::sqlx::{self, postgres::PgPoolOptions};
     /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
@@ -352,7 +368,7 @@ impl DbPools {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use sqlx::PgPool;
+    /// use sqlx_pool_registry::sqlx::{self, PgPool};
     /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
@@ -373,7 +389,7 @@ impl DbPools {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use sqlx::PgPool;
+    /// use sqlx_pool_registry::sqlx::{self, PgPool};
     /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
@@ -421,7 +437,7 @@ impl Deref for DbPools {
 /// # Example
 ///
 /// ```rust,no_run
-/// use sqlx::PgPool;
+/// use sqlx_pool_registry::sqlx::{self, PgPool};
 /// use sqlx_pool_registry::PoolProvider;
 ///
 /// async fn query_user<P: PoolProvider>(pools: &P, id: i64) -> Result<String, sqlx::Error> {
@@ -492,7 +508,7 @@ impl Error for UnknownPool {}
 /// # Examples
 ///
 /// ```rust
-/// use sqlx::postgres::PgPoolOptions;
+/// use sqlx_pool_registry::sqlx::{self, postgres::PgPoolOptions};
 /// use sqlx_pool_registry::{DbPools, PoolProvider, PoolRegistry};
 ///
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -619,7 +635,7 @@ where
 /// # Usage with `#[sqlx::test]`
 ///
 /// ```rust,no_run
-/// use sqlx::PgPool;
+/// use sqlx_pool_registry::sqlx::{self, PgPool};
 /// use sqlx_pool_registry::{PoolProvider, TestDbPools};
 ///
 /// #[sqlx::test]
@@ -655,7 +671,7 @@ where
 /// # Example
 ///
 /// ```rust,no_run
-/// use sqlx::PgPool;
+/// use sqlx_pool_registry::sqlx::{self, PgPool};
 /// use sqlx_pool_registry::{PoolProvider, TestDbPools};
 ///
 /// struct Repository<P: PoolProvider> {
@@ -713,7 +729,7 @@ impl TestDbPools {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use sqlx::PgPool;
+    /// use sqlx_pool_registry::sqlx::{self, PgPool};
     /// use sqlx_pool_registry::TestDbPools;
     ///
     /// # async fn example(pool: PgPool) -> Result<(), sqlx::Error> {
@@ -724,7 +740,7 @@ impl TestDbPools {
     /// # }
     /// ```
     pub async fn new(pool: PgPool) -> Result<Self, sqlx::Error> {
-        use sqlx::postgres::PgPoolOptions;
+        use crate::sqlx::postgres::PgPoolOptions;
 
         let primary = pool.clone();
 
@@ -760,7 +776,7 @@ impl PoolProvider for TestDbPools {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::postgres::PgPoolOptions;
+    use crate::sqlx::postgres::PgPoolOptions;
 
     fn lazy_pool(max_connections: u32) -> PgPool {
         PgPoolOptions::new()
@@ -890,21 +906,17 @@ mod tests {
         let db_name = format!("test_dbpools_{}", suffix);
 
         // Clean up if exists
-        sqlx::query(&format!(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'",
-            db_name
-        ))
-        .execute(admin_pool)
-        .await
-        .ok();
-        sqlx::query(&format!("DROP DATABASE IF EXISTS {}", db_name))
+        sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1")
+            .bind(&db_name)
             .execute(admin_pool)
+            .await
+            .ok();
+        execute_dynamic_ddl(admin_pool, format!("DROP DATABASE IF EXISTS {}", db_name))
             .await
             .unwrap();
 
         // Create fresh database
-        sqlx::query(&format!("CREATE DATABASE {}", db_name))
-            .execute(admin_pool)
+        execute_dynamic_ddl(admin_pool, format!("CREATE DATABASE {}", db_name))
             .await
             .unwrap();
 
@@ -921,7 +933,8 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        sqlx::query(&format!("INSERT INTO db_marker VALUES ('{}')", db_name))
+        sqlx::query("INSERT INTO db_marker VALUES ($1)")
+            .bind(&db_name)
             .execute(&pool)
             .await
             .unwrap();
@@ -930,17 +943,32 @@ mod tests {
     }
 
     async fn drop_test_db(admin_pool: &PgPool, db_name: &str) {
-        sqlx::query(&format!(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}'",
-            db_name
-        ))
-        .execute(admin_pool)
-        .await
-        .ok();
-        sqlx::query(&format!("DROP DATABASE IF EXISTS {}", db_name))
+        sqlx::query("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1")
+            .bind(db_name)
             .execute(admin_pool)
             .await
             .ok();
+        execute_dynamic_ddl(admin_pool, format!("DROP DATABASE IF EXISTS {}", db_name))
+            .await
+            .ok();
+    }
+
+    #[cfg(all(feature = "with-sqlx-0_8", not(feature = "with-sqlx-0_9")))]
+    async fn execute_dynamic_ddl(
+        pool: &PgPool,
+        statement: String,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::raw_sql(&statement).execute(pool).await
+    }
+
+    #[cfg(all(feature = "with-sqlx-0_9", not(feature = "with-sqlx-0_8")))]
+    async fn execute_dynamic_ddl(
+        pool: &PgPool,
+        statement: String,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::raw_sql(sqlx::AssertSqlSafe(statement))
+            .execute(pool)
+            .await
     }
 
     fn build_test_url(database: &str) -> String {

@@ -11,8 +11,11 @@ env:
 
 jobs:
   test:
-    name: Test
+    name: Test (${{ matrix.sqlx_feature }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sqlx_feature: [with-sqlx-0_8, with-sqlx-0_9]
 
     services:
       postgres:
@@ -41,19 +44,25 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ matrix.sqlx_feature }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+
+      - name: Check examples
+        run: cargo check --verbose --examples --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
 
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/test
-        run: cargo test --verbose --all-features
+        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
 
   lint:
-    name: Lint
+    name: Lint (${{ matrix.sqlx_feature }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sqlx_feature: [with-sqlx-0_8, with-sqlx-0_9]
 
     steps:
       - uses: actions/checkout@v4
@@ -67,4 +76,26 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-features -- -D warnings
+        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- -D warnings
+
+  msrv:
+    name: MSRV (Rust ${{ matrix.rust }}, ${{ matrix.sqlx_feature }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - rust: "1.78"
+            sqlx_feature: with-sqlx-0_8
+          - rust: "1.94"
+            sqlx_feature: with-sqlx-0_9
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Check library
+        run: cargo check --lib --no-default-features --features "${{ matrix.sqlx_feature }}"

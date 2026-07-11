@@ -29,8 +29,9 @@ docker run -d \
 # Set DATABASE_URL (use 'postgres' database for sqlx::test)
 export DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres
 
-# Run tests
-cargo test --all-features
+# Run tests with each supported SQLx version
+cargo test --features with-named-pools
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
 
 # Cleanup
 docker stop sqlx-pool-router-test-db && docker rm sqlx-pool-router-test-db
@@ -44,8 +45,9 @@ docker stop sqlx-pool-router-test-db && docker rm sqlx-pool-router-test-db
 # Format code
 cargo fmt
 
-# Run linter
-cargo clippy --all-features -- -D warnings
+# Run linter with each supported SQLx version
+cargo clippy --all-targets --features with-named-pools -- -D warnings
+cargo clippy --all-targets --no-default-features --features with-sqlx-0_9,with-named-pools -- -D warnings
 
 # Build documentation
 cargo doc --no-deps --open
@@ -102,7 +104,7 @@ cargo run --example testing
 2. Write unit tests with `#[sqlx::test]`
 3. Update documentation comments
 4. Add examples if needed
-5. Run all checks: `cargo test --all-features && cargo fmt && cargo clippy --all-features`
+5. Run formatting plus tests and clippy for both SQLx compatibility features
 
 ### Updating Documentation
 
@@ -146,8 +148,8 @@ Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 **CI Workflow** (`.github/workflows/ci.yml`):
 - Runs on push to main and PRs
-- Test job: Runs `cargo test --all-features` with PostgreSQL 16
-- Lint job: Runs `cargo fmt --check` and `cargo clippy`
+- Test job: Runs the test suite with PostgreSQL 16 for SQLx 0.8 and 0.9
+- Lint job: Runs `cargo fmt --check` and `cargo clippy` for both SQLx versions
 
 **Release Workflow** (`.github/workflows/release.yml`):
 - Runs on published GitHub releases
@@ -227,7 +229,8 @@ cargo fmt
 ### docs.rs build fails
 - Verify `[package.metadata.docs.rs]` in Cargo.toml
 - Check all doc comment code examples compile
-- Test locally: `cargo doc --all-features --no-deps`
+- Test locally with both `cargo doc --features with-named-pools --no-deps` and
+  `cargo doc --no-default-features --features with-sqlx-0_9,with-named-pools --no-deps`
 
 ## Real-World Usage
 

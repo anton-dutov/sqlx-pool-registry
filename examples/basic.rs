@@ -11,8 +11,10 @@
 //! 3. Optionally set REPLICA_DATABASE_URL (or it will use the same as primary)
 //! 4. Run: cargo run --example basic
 
-use sqlx::postgres::PgPoolOptions;
-use sqlx_pool_registry::{DbPools, PoolProvider};
+use sqlx_pool_registry::{
+    sqlx::{self, postgres::PgPoolOptions},
+    DbPools, PoolProvider,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

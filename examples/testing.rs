@@ -7,8 +7,10 @@
 //! 1. Set DATABASE_URL environment variable
 //! 2. Run: cargo run --example testing
 
-use sqlx::postgres::PgPoolOptions;
-use sqlx_pool_registry::{PoolProvider, TestDbPools};
+use sqlx_pool_registry::{
+    sqlx::{self, postgres::PgPoolOptions},
+    PoolProvider, TestDbPools,
+};
 
 /// A repository that should route reads to .read() and writes to .write()
 struct UserRepository<P: PoolProvider> {

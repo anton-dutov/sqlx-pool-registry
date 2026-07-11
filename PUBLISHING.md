@@ -39,7 +39,8 @@ The crate is configured to publish automatically when you create a release tag:
 ```bash
 # Update version in Cargo.toml if needed
 # Make sure all tests pass
-cargo test --all-features
+cargo test --features with-named-pools
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
 
 # Commit any changes
 git add Cargo.toml
@@ -66,7 +67,8 @@ If you prefer to publish manually:
 cargo login
 
 # Ensure tests pass
-cargo test --all-features
+cargo test --features with-named-pools
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
 
 # Publish
 cargo publish
@@ -137,7 +139,8 @@ Run tests locally with the same PostgreSQL version:
 ```bash
 docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=password postgres:16
 export DATABASE_URL=postgresql://postgres:password@localhost:5432/test
-cargo test --all-features
+cargo test --features with-named-pools
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
 ```
 
 ## Semantic Versioning

@@ -1,8 +1,8 @@
-# sqlx-pool-router
+# sqlx-pool-registry
 
-[![Crates.io](https://img.shields.io/crates/v/sqlx-pool-router.svg)](https://crates.io/crates/sqlx-pool-router)
-[![Documentation](https://docs.rs/sqlx-pool-router/badge.svg)](https://docs.rs/sqlx-pool-router)
-[![License](https://img.shields.io/crates/l/sqlx-pool-router.svg)](https://github.com/doublewordai/sqlx-pool-router#license)
+Forked from [doublewordai/sqlx-pool-router](https://github.com/doublewordai/sqlx-pool-router).
+
+[![Crates.io](https://img.shields.io/crates/v/sqlx-pool-router.svg)](https://crates.io/crates/sqlx-pool-router) [![Documentation](https://docs.rs/sqlx-pool-router/badge.svg)](https://docs.rs/sqlx-pool-router) [![License](https://img.shields.io/crates/l/sqlx-pool-router.svg)](https://github.com/doublewordai/sqlx-pool-router#license)
 
 A lightweight Rust library for routing database operations to different SQLx PostgreSQL connection pools based on whether they're read or write operations.
 
@@ -14,31 +14,38 @@ This enables load distribution by routing read-heavy operations to read replicas
 - **Type-safe routing**: Compile-time guarantees for read/write pool separation
 - **Backward compatible**: `PgPool` implements `PoolProvider` for seamless integration
 - **Flexible**: Use single pool or separate primary/replica pools
+- **SQLx compatibility**: Select SQLx 0.8 (default) or SQLx 0.9 at compile time
 - **Named pools (optional)**: Group independent providers by name with the `with-named-pools` feature
 - **Well-tested**: Comprehensive test suite with replica routing verification
 
 ## Installation
 
-Add this to your `Cargo.toml`:
+SQLx 0.8 is enabled by default:
 
-```toml
+``` toml
 [dependencies]
-sqlx-pool-registry = "0.2"
+sqlx-pool-registry = "0.2.1"
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
 ```
 
-Named pools are opt-in:
+For SQLx 0.9, disable the default compatibility feature and select 0.9 explicitly:
 
-```toml
+``` toml
 [dependencies]
-sqlx-pool-registry = { version = "0.2", features = ["with-named-pools"] }
+sqlx-pool-registry = { version = "0.2.1", default-features = false, features = ["with-sqlx-0_9"] }
+sqlx = { version = "0.9", features = ["postgres", "runtime-tokio"] }
 ```
+
+Exactly one of `with-sqlx-0_8` and `with-sqlx-0_9` must be enabled. The
+selected SQLx crate is also available as `sqlx_pool_registry::sqlx`. Add
+`with-named-pools` to either configuration to enable `PoolRegistry`. The
+effective minimum Rust version is 1.78 with SQLx 0.8 and 1.94 with SQLx 0.9.
 
 ## Quick Start
 
 ### Single Pool (Development)
 
-```rust
+``` rust
 use sqlx::PgPool;
 use sqlx_pool_registry::PoolProvider;
 
@@ -57,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Read/Write Separation (Production)
 
-```rust
+``` rust
 use sqlx::postgres::PgPoolOptions;
 use sqlx_pool_registry::{DbPools, PoolProvider};
 
@@ -92,11 +99,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Named Pools (Optional)
 
-With the `with-named-pools` feature, one registry can hold independent pool
-providers for databases such as `auth` and `analytics`. Looking up a name
-returns that provider; it does not select mutable registry-wide state.
+With the `with-named-pools` feature, one registry can hold independent pool providers for databases such as `auth` and `analytics`. Looking up a name returns that provider; it does not select mutable registry-wide state.
 
-```rust
+``` rust
 use sqlx::postgres::PgPoolOptions;
 use sqlx_pool_registry::{DbPools, PoolProvider, PoolRegistry};
 
@@ -132,16 +137,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Use `try_get()` in functions returning `Result`; `get()` returns `Option` for
-optional lookups. `DbPools::replica()` exposes only an explicitly configured
-replica and may return `None`. In contrast, `read()` falls back to the primary,
-while `write()` always returns the primary.
+Use `try_get()` in functions returning `Result`; `get()` returns `Option` for optional lookups. `DbPools::replica()` exposes only an explicitly configured replica and may return `None`. In contrast, `read()` falls back to the primary, while `write()` always returns the primary.
 
 ## Testing with `TestDbPools`
 
 The crate includes a `TestDbPools` helper for use with `#[sqlx::test]` that enforces read/write separation in your tests:
 
-```rust
+``` rust
 use sqlx::PgPool;
 use sqlx_pool_registry::{PoolProvider, TestDbPools};
 
@@ -175,7 +177,7 @@ async fn test_repository(pool: PgPool) {
 
 Make your types generic over `PoolProvider` to support both single and multi-pool configurations:
 
-```rust
+``` rust
 use sqlx_pool_registry::PoolProvider;
 
 struct Repository<P: PoolProvider> {
@@ -210,6 +212,7 @@ let repo_multi = Repository { pools: db_pools };
 ### `.read()` - For Read Operations
 
 Use for queries that:
+
 - Don't modify data (SELECT without FOR UPDATE)
 - Can tolerate slight staleness (eventual consistency)
 - Benefit from load distribution
@@ -219,6 +222,7 @@ Examples: user listings, analytics, dashboards, search
 ### `.write()` - For Write Operations
 
 Use for operations that:
+
 - Modify data (INSERT, UPDATE, DELETE)
 - Require transactions
 - Need locking reads (SELECT FOR UPDATE)
@@ -228,7 +232,7 @@ Examples: creating records, updates, deletes, transactions
 
 ## Architecture
 
-```text
+``` text
 ┌─────────────┐
 │   DbPools   │
 └──────┬──────┘
@@ -243,6 +247,7 @@ Examples: creating records, updates, deletes, transactions
 ## Real-World Use Cases
 
 This library is used in production by:
+
 - [outlet-postgres](https://github.com/doublewordai/outlet-postgres) - HTTP request/response logging middleware
 - [fusillade](https://github.com/doublewordai/fusillade) - LLM request batching daemon
 - [dwctl](https://github.com/doublewordai/control-layer) - Observability and analytics platform
@@ -260,7 +265,7 @@ at your option.
 
 The test suite requires a PostgreSQL database:
 
-```bash
+``` bash
 # Start PostgreSQL (using Docker)
 docker run -d \
   -p 5432:5432 \
@@ -272,8 +277,9 @@ docker run -d \
 # Set the DATABASE_URL (use 'postgres' database for sqlx::test to create isolated test DBs)
 export DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres
 
-# Run tests
-cargo test --all-features
+# Run tests with each supported SQLx version
+cargo test --features with-named-pools
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
 
 # Clean up
 docker stop sqlx-pool-router-test-db && docker rm sqlx-pool-router-test-db
