@@ -14,6 +14,7 @@ This enables load distribution by routing read-heavy operations to read replicas
 - **Type-safe routing**: Compile-time guarantees for read/write pool separation
 - **Backward compatible**: `PgPool` implements `PoolProvider` for seamless integration
 - **Flexible**: Use single pool or separate primary/replica pools
+- **Named pools (optional)**: Group independent providers by name with the `with-named-pools` feature
 - **Well-tested**: Comprehensive test suite with replica routing verification
 
 ## Installation
@@ -22,8 +23,15 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sqlx-pool-router = "0.1"
+sqlx-pool-registry = "0.2"
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
+```
+
+Named pools are opt-in:
+
+```toml
+[dependencies]
+sqlx-pool-registry = { version = "0.2", features = ["with-named-pools"] }
 ```
 
 ## Quick Start
@@ -32,7 +40,7 @@ sqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }
 
 ```rust
 use sqlx::PgPool;
-use sqlx-pool-router::PoolProvider;
+use sqlx_pool_registry::PoolProvider;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -51,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 use sqlx::postgres::PgPoolOptions;
-use sqlx-pool-router::{DbPools, PoolProvider};
+use sqlx_pool_registry::{DbPools, PoolProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -82,13 +90,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### Named Pools (Optional)
+
+With the `with-named-pools` feature, one registry can hold independent pool
+providers for databases such as `auth` and `analytics`. Looking up a name
+returns that provider; it does not select mutable registry-wide state.
+
+```rust
+use sqlx::postgres::PgPoolOptions;
+use sqlx_pool_registry::{DbPools, PoolProvider, PoolRegistry};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let auth_primary = PgPoolOptions::new()
+        .connect("postgresql://primary-host/auth")
+        .await?;
+    let auth_replica = PgPoolOptions::new()
+        .connect("postgresql://replica-host/auth")
+        .await?;
+    let analytics_primary = PgPoolOptions::new()
+        .connect("postgresql://primary-host/analytics")
+        .await?;
+
+    let mut pools = PoolRegistry::new();
+    pools.insert(
+        "auth",
+        DbPools::with_replica(auth_primary, auth_replica),
+    );
+    pools.insert("analytics", DbPools::new(analytics_primary));
+
+    let auth = pools.try_get("auth")?;
+    let analytics = pools.try_get("analytics")?;
+
+    let auth_primary = auth.primary();
+    let auth_replica = auth.replica(); // Option<&PgPool>; no fallback
+    let auth_reads = auth.read(); // Replica
+    let analytics_reads = analytics.read(); // Primary fallback
+    let analytics_writes = analytics.write(); // Primary
+
+    Ok(())
+}
+```
+
+Use `try_get()` in functions returning `Result`; `get()` returns `Option` for
+optional lookups. `DbPools::replica()` exposes only an explicitly configured
+replica and may return `None`. In contrast, `read()` falls back to the primary,
+while `write()` always returns the primary.
+
 ## Testing with `TestDbPools`
 
 The crate includes a `TestDbPools` helper for use with `#[sqlx::test]` that enforces read/write separation in your tests:
 
 ```rust
 use sqlx::PgPool;
-use sqlx-pool-router::{TestDbPools, PoolProvider};
+use sqlx_pool_registry::{PoolProvider, TestDbPools};
 
 #[sqlx::test]
 async fn test_repository(pool: PgPool) {
@@ -121,7 +176,7 @@ async fn test_repository(pool: PgPool) {
 Make your types generic over `PoolProvider` to support both single and multi-pool configurations:
 
 ```rust
-use sqlx-pool-router::PoolProvider;
+use sqlx_pool_registry::PoolProvider;
 
 struct Repository<P: PoolProvider> {
     pools: P,

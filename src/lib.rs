@@ -1,4 +1,4 @@
-//! # sqlx_pool_router
+//! # sqlx_pool_registry
 //!
 //! A lightweight library for routing database operations to different SQLx PostgreSQL connection pools
 //! based on whether they're read or write operations.
@@ -12,6 +12,8 @@
 //! - **Type-safe routing**: Compile-time guarantees for read/write pool separation
 //! - **Backward compatible**: `PgPool` implements `PoolProvider` for seamless integration
 //! - **Flexible**: Use single pool or separate primary/replica pools
+//! - **Named pools (optional)**: Group independent providers by name with the
+//!   `with-named-pools` feature
 //! - **Test helpers**: [`TestDbPools`] for testing with `#[sqlx::test]`
 //! - **Well-tested**: Comprehensive test suite with replica routing verification
 //!
@@ -21,7 +23,7 @@
 //!
 //! ```rust,no_run
 //! use sqlx::PgPool;
-//! use sqlx_pool_router::PoolProvider;
+//! use sqlx_pool_registry::PoolProvider;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let pool = PgPool::connect("postgresql://localhost/mydb").await?;
@@ -38,7 +40,7 @@
 //!
 //! ```rust,no_run
 //! use sqlx::postgres::PgPoolOptions;
-//! use sqlx_pool_router::{DbPools, PoolProvider};
+//! use sqlx_pool_registry::{DbPools, PoolProvider};
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let primary = PgPoolOptions::new()
@@ -67,6 +69,13 @@
 //! # }
 //! ```
 //!
+//! ### Named Pools (Optional)
+//!
+//! Enable the `with-named-pools` feature to use `PoolRegistry`. A lookup
+//! returns one independent provider and never changes registry-wide state.
+//! The full example is available on the `PoolRegistry` API documentation when
+//! the feature is enabled.
+//!
 //! ## Architecture
 //!
 //! ```text
@@ -86,7 +95,7 @@
 //! Make your types generic over `PoolProvider` to support both single and multi-pool configurations:
 //!
 //! ```rust
-//! use sqlx_pool_router::PoolProvider;
+//! use sqlx_pool_registry::PoolProvider;
 //!
 //! struct Repository<P: PoolProvider> {
 //!     pools: P,
@@ -117,7 +126,7 @@
 //!
 //! ```rust,no_run
 //! use sqlx::PgPool;
-//! use sqlx_pool_router::{TestDbPools, PoolProvider};
+//! use sqlx_pool_registry::{PoolProvider, TestDbPools};
 //!
 //! #[sqlx::test]
 //! async fn test_repository(pool: PgPool) {
@@ -134,6 +143,12 @@
 //! This catches routing bugs immediately without needing a real replica database.
 
 use sqlx::PgPool;
+#[cfg(feature = "with-named-pools")]
+use std::collections::HashMap;
+#[cfg(feature = "with-named-pools")]
+use std::error::Error;
+#[cfg(feature = "with-named-pools")]
+use std::fmt;
 use std::ops::Deref;
 
 /// Trait for providing database pools with read/write routing.
@@ -171,7 +186,7 @@ use std::ops::Deref;
 ///
 /// ```
 /// use sqlx::PgPool;
-/// use sqlx_pool_router::PoolProvider;
+/// use sqlx_pool_registry::PoolProvider;
 ///
 /// #[derive(Clone)]
 /// struct MyPools {
@@ -215,7 +230,7 @@ pub trait PoolProvider: Clone + Send + Sync + 'static {
 ///
 /// ```rust,no_run
 /// use sqlx::PgPool;
-/// use sqlx_pool_router::DbPools;
+/// use sqlx_pool_registry::DbPools;
 ///
 /// # async fn example() -> Result<(), sqlx::Error> {
 /// let pool = PgPool::connect("postgresql://localhost/db").await?;
@@ -231,7 +246,7 @@ pub trait PoolProvider: Clone + Send + Sync + 'static {
 ///
 /// ```rust,no_run
 /// use sqlx::postgres::PgPoolOptions;
-/// use sqlx_pool_router::DbPools;
+/// use sqlx_pool_registry::DbPools;
 ///
 /// # async fn example() -> Result<(), sqlx::Error> {
 /// let primary = PgPoolOptions::new()
@@ -265,7 +280,7 @@ impl DbPools {
     ///
     /// ```rust,no_run
     /// use sqlx::PgPool;
-    /// use sqlx_pool_router::DbPools;
+    /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
     /// let pool = PgPool::connect("postgresql://localhost/db").await?;
@@ -289,7 +304,7 @@ impl DbPools {
     ///
     /// ```rust,no_run
     /// use sqlx::postgres::PgPoolOptions;
-    /// use sqlx_pool_router::DbPools;
+    /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
     /// let primary = PgPoolOptions::new()
@@ -313,6 +328,23 @@ impl DbPools {
         }
     }
 
+    /// Get the primary pool.
+    ///
+    /// Unlike [`write`](PoolProvider::write), this method describes the physical
+    /// pool topology rather than the operation being routed. Both methods return
+    /// the same pool for `DbPools`.
+    pub fn primary(&self) -> &PgPool {
+        &self.primary
+    }
+
+    /// Get the configured replica pool, if one exists.
+    ///
+    /// This method does not fall back to the primary pool. Use
+    /// [`read`](PoolProvider::read) when a routable read pool is required.
+    pub fn replica(&self) -> Option<&PgPool> {
+        self.replica.as_ref()
+    }
+
     /// Check if a replica pool is configured.
     ///
     /// Returns `true` if a replica pool was provided via [`with_replica`](Self::with_replica).
@@ -321,7 +353,7 @@ impl DbPools {
     ///
     /// ```rust,no_run
     /// use sqlx::PgPool;
-    /// use sqlx_pool_router::DbPools;
+    /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
     /// let pool = PgPool::connect("postgresql://localhost/db").await?;
@@ -331,7 +363,7 @@ impl DbPools {
     /// # }
     /// ```
     pub fn has_replica(&self) -> bool {
-        self.replica.is_some()
+        self.replica().is_some()
     }
 
     /// Close all database connections.
@@ -342,7 +374,7 @@ impl DbPools {
     ///
     /// ```rust,no_run
     /// use sqlx::PgPool;
-    /// use sqlx_pool_router::DbPools;
+    /// use sqlx_pool_registry::DbPools;
     ///
     /// # async fn example() -> Result<(), sqlx::Error> {
     /// let pool = PgPool::connect("postgresql://localhost/db").await?;
@@ -352,8 +384,8 @@ impl DbPools {
     /// # }
     /// ```
     pub async fn close(&self) {
-        self.primary.close().await;
-        if let Some(replica) = &self.replica {
+        self.primary().close().await;
+        if let Some(replica) = self.replica() {
             replica.close().await;
         }
     }
@@ -361,11 +393,11 @@ impl DbPools {
 
 impl PoolProvider for DbPools {
     fn read(&self) -> &PgPool {
-        self.replica.as_ref().unwrap_or(&self.primary)
+        self.replica().unwrap_or(self.primary())
     }
 
     fn write(&self) -> &PgPool {
-        &self.primary
+        self.primary()
     }
 }
 
@@ -377,7 +409,7 @@ impl Deref for DbPools {
     type Target = PgPool;
 
     fn deref(&self) -> &Self::Target {
-        &self.primary
+        self.primary()
     }
 }
 
@@ -390,7 +422,7 @@ impl Deref for DbPools {
 ///
 /// ```rust,no_run
 /// use sqlx::PgPool;
-/// use sqlx_pool_router::PoolProvider;
+/// use sqlx_pool_registry::PoolProvider;
 ///
 /// async fn query_user<P: PoolProvider>(pools: &P, id: i64) -> Result<String, sqlx::Error> {
 ///     sqlx::query_scalar("SELECT name FROM users WHERE id = $1")
@@ -417,6 +449,163 @@ impl PoolProvider for PgPool {
     }
 }
 
+/// Error returned when a named pool is not registered.
+///
+/// Available with the `with-named-pools` feature.
+#[cfg(feature = "with-named-pools")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UnknownPool {
+    name: String,
+}
+
+#[cfg(feature = "with-named-pools")]
+impl UnknownPool {
+    fn new(name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+        }
+    }
+
+    /// Return the name that was not found.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+#[cfg(feature = "with-named-pools")]
+impl fmt::Display for UnknownPool {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "unknown pool `{}`", self.name)
+    }
+}
+
+#[cfg(feature = "with-named-pools")]
+impl Error for UnknownPool {}
+
+/// A registry of database pool providers keyed by name.
+///
+/// `PoolRegistry` is available with the `with-named-pools` feature. It stores
+/// one homogeneous provider type and defaults to [`DbPools`]. Selecting a name
+/// returns the provider for that name; the registry itself does not keep a
+/// stateful "current" pool and does not implement [`PoolProvider`].
+///
+/// # Examples
+///
+/// ```rust
+/// use sqlx::postgres::PgPoolOptions;
+/// use sqlx_pool_registry::{DbPools, PoolProvider, PoolRegistry};
+///
+/// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let auth_primary = PgPoolOptions::new()
+///     .connect_lazy("postgresql://localhost/auth")?;
+/// let auth_replica = PgPoolOptions::new()
+///     .connect_lazy("postgresql://localhost/auth_replica")?;
+/// let analytics = PgPoolOptions::new()
+///     .connect_lazy("postgresql://localhost/analytics")?;
+///
+/// let mut pools = PoolRegistry::new();
+/// pools.insert("auth", DbPools::with_replica(auth_primary, auth_replica));
+/// pools.insert("analytics", DbPools::new(analytics));
+///
+/// let auth = pools.try_get("auth")?;
+/// let _primary = auth.primary();
+/// let _replica = auth.replica(); // Option<&PgPool>, with no fallback
+/// let _read = auth.read(); // Replica, or primary when no replica is configured
+/// # Ok(())
+/// # }
+/// ```
+#[cfg(feature = "with-named-pools")]
+#[derive(Clone, Debug)]
+pub struct PoolRegistry<P: PoolProvider = DbPools> {
+    pools: HashMap<String, P>,
+}
+
+#[cfg(feature = "with-named-pools")]
+impl<P: PoolProvider> PoolRegistry<P> {
+    /// Create an empty pool registry.
+    pub fn new() -> Self {
+        Self {
+            pools: HashMap::new(),
+        }
+    }
+
+    /// Insert a provider under `name`.
+    ///
+    /// If the name was already registered, the previous provider is replaced
+    /// and returned.
+    pub fn insert(&mut self, name: impl Into<String>, provider: P) -> Option<P> {
+        self.pools.insert(name.into(), provider)
+    }
+
+    /// Get a provider by name.
+    ///
+    /// Names are matched exactly and case-sensitively.
+    pub fn get(&self, name: &str) -> Option<&P> {
+        self.pools.get(name)
+    }
+
+    /// Get a provider by name, returning [`UnknownPool`] when it is absent.
+    pub fn try_get(&self, name: &str) -> Result<&P, UnknownPool> {
+        self.get(name).ok_or_else(|| UnknownPool::new(name))
+    }
+
+    /// Return whether a provider is registered under `name`.
+    pub fn contains_key(&self, name: &str) -> bool {
+        self.pools.contains_key(name)
+    }
+
+    /// Return the number of registered providers.
+    pub fn len(&self) -> usize {
+        self.pools.len()
+    }
+
+    /// Return whether the registry contains no providers.
+    pub fn is_empty(&self) -> bool {
+        self.pools.is_empty()
+    }
+
+    /// Iterate over registered names and providers in unspecified order.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &P)> {
+        self.pools
+            .iter()
+            .map(|(name, provider)| (name.as_str(), provider))
+    }
+}
+
+#[cfg(feature = "with-named-pools")]
+impl<P: PoolProvider> Default for PoolRegistry<P> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(feature = "with-named-pools")]
+impl<K, P> FromIterator<(K, P)> for PoolRegistry<P>
+where
+    K: Into<String>,
+    P: PoolProvider,
+{
+    fn from_iter<T: IntoIterator<Item = (K, P)>>(iter: T) -> Self {
+        let mut registry = Self::new();
+        registry.extend(iter);
+        registry
+    }
+}
+
+#[cfg(feature = "with-named-pools")]
+impl<K, P> Extend<(K, P)> for PoolRegistry<P>
+where
+    K: Into<String>,
+    P: PoolProvider,
+{
+    fn extend<T: IntoIterator<Item = (K, P)>>(&mut self, iter: T) {
+        self.pools.extend(
+            iter.into_iter()
+                .map(|(name, provider)| (name.into(), provider)),
+        );
+    }
+}
+
 /// Test pool provider with read-only replica enforcement.
 ///
 /// This creates two separate connection pools from the same database:
@@ -431,7 +620,7 @@ impl PoolProvider for PgPool {
 ///
 /// ```rust,no_run
 /// use sqlx::PgPool;
-/// use sqlx_pool_router::{TestDbPools, PoolProvider};
+/// use sqlx_pool_registry::{PoolProvider, TestDbPools};
 ///
 /// #[sqlx::test]
 /// async fn test_read_write_routing(pool: PgPool) {
@@ -467,7 +656,7 @@ impl PoolProvider for PgPool {
 ///
 /// ```rust,no_run
 /// use sqlx::PgPool;
-/// use sqlx_pool_router::{TestDbPools, PoolProvider};
+/// use sqlx_pool_registry::{PoolProvider, TestDbPools};
 ///
 /// struct Repository<P: PoolProvider> {
 ///     pools: P,
@@ -525,7 +714,7 @@ impl TestDbPools {
     ///
     /// ```rust,no_run
     /// use sqlx::PgPool;
-    /// use sqlx_pool_router::TestDbPools;
+    /// use sqlx_pool_registry::TestDbPools;
     ///
     /// # async fn example(pool: PgPool) -> Result<(), sqlx::Error> {
     /// let pools = TestDbPools::new(pool).await?;
@@ -572,6 +761,129 @@ impl PoolProvider for TestDbPools {
 mod tests {
     use super::*;
     use sqlx::postgres::PgPoolOptions;
+
+    fn lazy_pool(max_connections: u32) -> PgPool {
+        PgPoolOptions::new()
+            .max_connections(max_connections)
+            .connect_lazy("postgresql://postgres:password@localhost/test")
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_dbpools_topology_accessors() {
+        let primary_only = DbPools::new(lazy_pool(1));
+
+        assert_eq!(primary_only.primary().options().get_max_connections(), 1);
+        assert!(primary_only.replica().is_none());
+        assert!(std::ptr::eq(primary_only.primary(), primary_only.read()));
+        assert!(std::ptr::eq(primary_only.primary(), primary_only.write()));
+
+        let with_replica = DbPools::with_replica(lazy_pool(2), lazy_pool(3));
+
+        assert_eq!(with_replica.primary().options().get_max_connections(), 2);
+        assert_eq!(
+            with_replica
+                .replica()
+                .unwrap()
+                .options()
+                .get_max_connections(),
+            3
+        );
+        assert!(std::ptr::eq(
+            with_replica.replica().unwrap(),
+            with_replica.read()
+        ));
+        assert!(std::ptr::eq(with_replica.primary(), with_replica.write()));
+    }
+
+    #[cfg(feature = "with-named-pools")]
+    #[tokio::test]
+    async fn test_pool_registry_named_lookup_and_iteration() {
+        let mut registry = PoolRegistry::new();
+
+        assert!(registry.is_empty());
+        assert!(registry
+            .insert("auth", DbPools::with_replica(lazy_pool(4), lazy_pool(5)))
+            .is_none());
+        assert!(registry
+            .insert("analytics", DbPools::new(lazy_pool(6)))
+            .is_none());
+
+        assert_eq!(registry.len(), 2);
+        assert!(!registry.is_empty());
+        assert!(registry.contains_key("auth"));
+        assert!(registry.contains_key("analytics"));
+        assert!(!registry.contains_key("Auth"));
+
+        let auth = registry.try_get("auth").unwrap();
+        assert_eq!(auth.primary().options().get_max_connections(), 4);
+        assert_eq!(auth.replica().unwrap().options().get_max_connections(), 5);
+        assert!(std::ptr::eq(auth.replica().unwrap(), auth.read()));
+
+        let analytics = registry.get("analytics").unwrap();
+        assert!(analytics.replica().is_none());
+        assert!(std::ptr::eq(analytics.primary(), analytics.read()));
+
+        let mut names: Vec<_> = registry.iter().map(|(name, _)| name).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["analytics", "auth"]);
+    }
+
+    #[cfg(feature = "with-named-pools")]
+    #[test]
+    fn test_pool_registry_reports_unknown_pool() {
+        let registry = PoolRegistry::<DbPools>::default();
+
+        assert!(registry.get("missing").is_none());
+
+        let error = registry.try_get("missing").unwrap_err();
+        assert_eq!(error.name(), "missing");
+        assert_eq!(error.to_string(), "unknown pool `missing`");
+
+        let _: &dyn std::error::Error = &error;
+    }
+
+    #[cfg(feature = "with-named-pools")]
+    #[tokio::test]
+    async fn test_pool_registry_replaces_duplicate_name() {
+        let mut registry = PoolRegistry::new();
+
+        assert!(registry
+            .insert("auth", DbPools::new(lazy_pool(7)))
+            .is_none());
+        let replaced = registry.insert("auth", DbPools::new(lazy_pool(8))).unwrap();
+
+        assert_eq!(replaced.primary().options().get_max_connections(), 7);
+        assert_eq!(
+            registry
+                .get("auth")
+                .unwrap()
+                .primary()
+                .options()
+                .get_max_connections(),
+            8
+        );
+        assert_eq!(registry.len(), 1);
+    }
+
+    #[cfg(feature = "with-named-pools")]
+    #[tokio::test]
+    async fn test_pool_registry_is_generic_and_supports_iterators() {
+        let mut registry: PoolRegistry<PgPool> = [("direct", lazy_pool(9))].into_iter().collect();
+        registry.extend([("reporting".to_owned(), lazy_pool(10))]);
+
+        let direct = registry.try_get("direct").unwrap();
+        assert!(std::ptr::eq(direct, direct.read()));
+        assert!(std::ptr::eq(direct, direct.write()));
+        assert_eq!(
+            registry
+                .get("reporting")
+                .unwrap()
+                .options()
+                .get_max_connections(),
+            10
+        );
+    }
 
     /// Helper to create a test database and return its pool and name
     async fn create_test_db(admin_pool: &PgPool, suffix: &str) -> (PgPool, String) {

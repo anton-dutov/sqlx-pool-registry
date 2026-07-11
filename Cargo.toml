@@ -1,8 +1,8 @@
 [package]
-name = "sqlx-pool-router"
+name = "sqlx-pool-registry"
 version = "0.2.0"
 edition = "2021"
-authors = ["fergus.finn@doubleword.ai"]
+authors = ["Anton Dutov <anton.dutov@gmail.com>", "fergus.finn@doubleword.ai"]
 description = "Lightweight SQLx PostgreSQL connection pool routing for primary/replica separation"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/doublewordai/sqlx-pool-router"
@@ -17,6 +17,10 @@ sqlx = { version = "0.8", default-features = false, features = ["postgres"] }
 tokio = { version = "1.0", features = ["full"] }
 url = "2.5"
 sqlx = { version = "0.8", features = ["postgres", "macros", "runtime-tokio"] }
+
+[features]
+default = []
+with-named-pools = []
 
 [package.metadata.docs.rs]
 all-features = true

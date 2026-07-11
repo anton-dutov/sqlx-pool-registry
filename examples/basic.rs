@@ -12,7 +12,7 @@
 //! 4. Run: cargo run --example basic
 
 use sqlx::postgres::PgPoolOptions;
-use sqlx_pool_router::{DbPools, PoolProvider};
+use sqlx_pool_registry::{DbPools, PoolProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
