@@ -10,8 +10,41 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test (${{ matrix.sqlx_feature }})
+  offline-test:
+    name: Offline test (${{ matrix.sqlx_feature }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        sqlx_feature: [with-sqlx-0_8, with-sqlx-0_9]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-offline-${{ matrix.sqlx_feature }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+
+      - name: Check examples
+        run: cargo check --verbose --examples --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+
+      - name: Run offline tests without DATABASE_URL
+        run: |
+          unset DATABASE_URL
+          cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+
+  database-test:
+    name: Database test (${{ matrix.sqlx_feature }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -44,18 +77,12 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ matrix.sqlx_feature }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-database-${{ matrix.sqlx_feature }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build
-        run: cargo build --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
-
-      - name: Check examples
-        run: cargo check --verbose --examples --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
-
-      - name: Run tests
+      - name: Run database tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/test
-        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- --ignored
 
   lint:
     name: Lint (${{ matrix.sqlx_feature }})

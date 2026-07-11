@@ -122,6 +122,7 @@ fn build_test_url(database: &str) -> String {
 }
 
 #[registry_sqlx::test]
+#[ignore = "requires PostgreSQL via DATABASE_URL"]
 async fn test_dbpools_without_replica(pool: PgPool) {
     let db_pools = DbPools::new(pool.clone());
 
@@ -150,6 +151,7 @@ async fn test_dbpools_without_replica(pool: PgPool) {
 }
 
 #[registry_sqlx::test]
+#[ignore = "requires PostgreSQL via DATABASE_URL"]
 async fn test_dbpools_with_replica_routes_correctly(_pool: PgPool) {
     // Create admin connection to postgres database
     let admin_url = build_test_url("postgres");
@@ -203,15 +205,20 @@ async fn test_dbpools_with_replica_routes_correctly(_pool: PgPool) {
     drop_test_db(&admin_pool, &replica_name).await;
 }
 
-#[registry_sqlx::test]
-async fn test_dbpools_close(pool: PgPool) {
-    let db_pools = DbPools::new(pool);
+#[tokio::test]
+async fn test_dbpools_close() {
+    let primary = lazy_pool(1);
+    let replica = lazy_pool(2);
+    let db_pools = DbPools::with_replica(primary.clone(), replica.clone());
 
-    // Close should not panic
     db_pools.close().await;
+
+    assert!(primary.is_closed());
+    assert!(replica.is_closed());
 }
 
 #[registry_sqlx::test]
+#[ignore = "requires PostgreSQL via DATABASE_URL"]
 async fn test_pgpool_implements_pool_provider(pool: PgPool) {
     // PgPool should implement PoolProvider
     assert_eq!(pool.read() as *const _, pool.write() as *const _);

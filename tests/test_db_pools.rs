@@ -8,6 +8,7 @@ use sqlx_pool_registry::sqlx as registry_sqlx;
 use sqlx_pool_registry::{PoolProvider, TestDbPools};
 
 #[registry_sqlx::test]
+#[ignore = "requires PostgreSQL via DATABASE_URL"]
 async fn test_testdbpools_read_pool_rejects_writes(pool: PgPool) {
     let pools = TestDbPools::new(pool).await.unwrap();
 
@@ -32,6 +33,7 @@ async fn test_testdbpools_read_pool_rejects_writes(pool: PgPool) {
 }
 
 #[registry_sqlx::test]
+#[ignore = "requires PostgreSQL via DATABASE_URL"]
 async fn test_testdbpools_read_pool_allows_selects(pool: PgPool) {
     let pools = TestDbPools::new(pool).await.unwrap();
 
@@ -45,13 +47,24 @@ async fn test_testdbpools_read_pool_allows_selects(pool: PgPool) {
 }
 
 #[registry_sqlx::test]
-async fn test_testdbpools_write_pool_allows_writes(_pool: PgPool) {
-    // Note: This test is removed because sqlx::test doesn't easily support
-    // testing TEMP tables (which are per-connection) with TestDbPools
-    // (which creates separate connection pools).
-    //
-    // The functionality is still well-tested by:
-    // - test_testdbpools_read_pool_rejects_writes (proves read pool rejects writes)
-    // - test_testdbpools_read_pool_allows_selects (proves read pool allows reads)
-    // - Integration tests in examples/testing.rs
+#[ignore = "requires PostgreSQL via DATABASE_URL"]
+async fn test_testdbpools_write_pool_allows_writes(pool: PgPool) {
+    let pools = TestDbPools::new(pool).await.unwrap();
+
+    registry_sqlx::query("CREATE TABLE test_write (id INT)")
+        .execute(pools.write())
+        .await
+        .expect("Write pool should allow CREATE TABLE");
+
+    registry_sqlx::query("INSERT INTO test_write VALUES (1)")
+        .execute(pools.write())
+        .await
+        .expect("Write pool should allow INSERT");
+
+    let count: (i64,) = registry_sqlx::query_as("SELECT COUNT(*) FROM test_write")
+        .fetch_one(pools.write())
+        .await
+        .expect("Write pool should allow reading written data");
+
+    assert_eq!(count.0, 1);
 }

@@ -263,7 +263,18 @@ at your option.
 
 ## Running Tests
 
-The test suite requires a PostgreSQL database:
+The default test suite is offline: it does not require PostgreSQL or
+`DATABASE_URL`. Database-dependent tests are explicitly ignored, so both SQLx
+configurations can be checked with:
+
+``` bash
+unset DATABASE_URL
+cargo test --features with-named-pools
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
+```
+
+To run only the database-dependent tests, start PostgreSQL and set
+`DATABASE_URL` explicitly:
 
 ``` bash
 # Start PostgreSQL (using Docker)
@@ -271,21 +282,26 @@ docker run -d \
   -p 5432:5432 \
   -e POSTGRES_PASSWORD=password \
   -e POSTGRES_DB=test \
-  --name sqlx-pool-router-test-db \
+  --name sqlx-pool-registry-test-db \
   postgres:16
 
-# Set the DATABASE_URL (use 'postgres' database for sqlx::test to create isolated test DBs)
-export DATABASE_URL=postgresql://postgres:password@localhost:5432/postgres
+# The PostgreSQL role must have permission to create databases.
+export DATABASE_URL=postgresql://postgres:password@localhost:5432/test
 
-# Run tests with each supported SQLx version
-cargo test --features with-named-pools
-cargo test --no-default-features --features with-sqlx-0_9,with-named-pools
+# Run only tests that require PostgreSQL.
+cargo test --features with-named-pools -- --ignored
+cargo test --no-default-features --features with-sqlx-0_9,with-named-pools -- --ignored
 
 # Clean up
-docker stop sqlx-pool-router-test-db && docker rm sqlx-pool-router-test-db
+docker stop sqlx-pool-registry-test-db
+docker rm sqlx-pool-registry-test-db
 ```
 
-**Note:** The tests use `#[sqlx::test]` which automatically creates isolated test databases for each test, so you don't need to worry about test pollution.
+For the release-equivalent full suite, replace `-- --ignored` with
+`-- --include-ignored`. The database tests use `#[sqlx::test]`, which creates
+isolated test databases; this is why the role in `DATABASE_URL` needs
+`CREATE DATABASE`. An unset URL is fine for the default suite, while an unset or
+unreachable URL makes an explicit database-test run fail.
 
 ## Contributing
 

@@ -46,7 +46,7 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/test
-        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- --include-ignored
 
       - name: Check formatting
         run: cargo fmt -- --check
