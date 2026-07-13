@@ -12,6 +12,7 @@ cover changes made in this crate after the fork.
 
 ### Changed
 
+- Raised the minimum supported Rust version (MSRV) to 1.94.
 - Made `DbPools: Deref<Target = PgPool>` an opt-in legacy API behind the
   `with-deref` feature. It always returns the primary pool, bypasses read
   routing, and will be removed in the next major version. Use `read()` or

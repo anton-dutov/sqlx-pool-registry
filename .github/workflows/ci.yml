@@ -116,7 +116,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - rust: "1.78"
+          - rust: "1.94"
             sqlx_feature: with-sqlx-0_8
           - rust: "1.94"
             sqlx_feature: with-sqlx-0_9

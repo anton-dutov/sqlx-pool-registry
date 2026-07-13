@@ -1,7 +1,8 @@
 [package]
 name = "sqlx-pool-registry"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
+rust-version = "1.94"
 authors = ["Anton Dutov <anton.dutov@gmail.com>", "fergus.finn@doubleword.ai"]
 description = "Lightweight SQLx PostgreSQL connection pool routing for primary/replica separation"
 license = "MIT OR Apache-2.0"
