@@ -12,8 +12,8 @@
 //! 4. Run: cargo run --example basic
 
 use sqlx_pool_registry::{
-    sqlx::{self, postgres::PgPoolOptions},
     DbPools, PoolProvider,
+    sqlx::{self, postgres::PgPoolOptions},
 };
 
 #[tokio::main]

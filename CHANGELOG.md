@@ -8,7 +8,7 @@ at commit [`bd5dd8a`](https://github.com/doublewordai/sqlx-pool-router/commit/bd
 The upstream changelog is intentionally not duplicated here; entries below
 cover changes made in this crate after the fork.
 
-## Unreleased
+## [0.3.0]
 
 ### Changed
 
@@ -54,4 +54,5 @@ cover changes made in this crate after the fork.
 - Expanded CI and release validation to build, lint, test, and check examples
   for SQLx 0.8 and SQLx 0.9 independently.
 
+[0.3.0]: https://github.com/anton-dutov/sqlx-pool-registry/releases/tag/sqlx-pool-registry-v0.3.0
 [0.2.1]: https://github.com/anton-dutov/sqlx-pool-registry/releases/tag/sqlx-pool-registry-v0.2.1

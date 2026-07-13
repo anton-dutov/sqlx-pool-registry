@@ -11,12 +11,16 @@ async fn test_pool_registry_named_lookup_and_iteration() {
     let mut registry = PoolRegistry::new();
 
     assert!(registry.is_empty());
-    assert!(registry
-        .insert("auth", DbPools::with_replica(lazy_pool(4), lazy_pool(5)))
-        .is_none());
-    assert!(registry
-        .insert("analytics", DbPools::new(lazy_pool(6)))
-        .is_none());
+    assert!(
+        registry
+            .insert("auth", DbPools::with_replica(lazy_pool(4), lazy_pool(5)))
+            .is_none()
+    );
+    assert!(
+        registry
+            .insert("analytics", DbPools::new(lazy_pool(6)))
+            .is_none()
+    );
 
     assert_eq!(registry.len(), 2);
     assert!(!registry.is_empty());
@@ -55,9 +59,11 @@ fn test_pool_registry_reports_unknown_pool() {
 async fn test_pool_registry_replaces_duplicate_name() {
     let mut registry = PoolRegistry::new();
 
-    assert!(registry
-        .insert("auth", DbPools::new(lazy_pool(7)))
-        .is_none());
+    assert!(
+        registry
+            .insert("auth", DbPools::new(lazy_pool(7)))
+            .is_none()
+    );
     let replaced = registry.insert("auth", DbPools::new(lazy_pool(8))).unwrap();
 
     assert_eq!(replaced.primary().options().get_max_connections(), 7);

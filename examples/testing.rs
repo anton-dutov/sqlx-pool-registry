@@ -8,8 +8,8 @@
 //! 2. Run: cargo run --example testing
 
 use sqlx_pool_registry::{
-    sqlx::{self, postgres::PgPoolOptions},
     PoolProvider, TestDbPools,
+    sqlx::{self, postgres::PgPoolOptions},
 };
 
 /// A repository that should route reads to .read() and writes to .write()

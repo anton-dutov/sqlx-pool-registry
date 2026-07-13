@@ -1,4 +1,4 @@
-use sqlx_pool_registry::sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx_pool_registry::sqlx::{PgPool, postgres::PgPoolOptions};
 
 pub fn lazy_pool(max_connections: u32) -> PgPool {
     PgPoolOptions::new()
