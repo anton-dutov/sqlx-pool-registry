@@ -16,6 +16,7 @@ This enables load distribution by routing read-heavy operations to read replicas
 - **Flexible**: Use single pool or separate primary/replica pools
 - **SQLx compatibility**: Select SQLx 0.8 (default) or SQLx 0.9 at compile time
 - **Named pools (optional)**: Group independent providers by name with the `with-named-pools` feature
+- **Legacy `Deref` compatibility (optional)**: Restore `DbPools: Deref<Target = PgPool>` temporarily with the `with-deref` feature
 - **Well-tested**: Comprehensive test suite with replica routing verification
 
 ## Installation
@@ -37,6 +38,23 @@ sqlx = { version = "0.9", features = ["postgres", "runtime-tokio"] }
 ```
 
 Exactly one of `with-sqlx-0_8` and `with-sqlx-0_9` must be enabled. The selected SQLx crate is also available as `sqlx_pool_registry::sqlx`. Add `with-named-pools` to either configuration to enable `PoolRegistry`. The effective minimum Rust version is 1.94 with SQLx 0.8 and 1.94 with SQLx 0.9.
+
+### Legacy `Deref` migration
+
+`DbPools` does not implement `Deref<Target = PgPool>` by default. To keep an
+existing `&*pools` call compiling while migrating, add `with-deref` to the
+crate features. This is a temporary compatibility path and will be removed in
+the next major version.
+
+```toml
+[dependencies]
+sqlx-pool-registry = { version = "0.2.1", features = ["with-deref"] }
+```
+
+`&*pools` always selects the primary pool and bypasses read routing. Do not use
+it for database queries: replace `fetch_one(&*pools)` with `fetch_one(pools.read())`
+for eligible reads or `fetch_one(pools.write())` for writes, locking reads, and
+read-after-write operations.
 
 ## Quick Start
 

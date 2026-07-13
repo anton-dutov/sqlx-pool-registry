@@ -6,7 +6,7 @@ extern crate sqlx_0_9 as sqlx;
 mod common;
 
 use common::lazy_pool;
-use registry_sqlx::{postgres::PgPoolOptions, PgPool};
+use registry_sqlx::{PgPool, postgres::PgPoolOptions};
 use sqlx_pool_registry::sqlx as registry_sqlx;
 use sqlx_pool_registry::{DbPools, PoolProvider};
 
@@ -35,6 +35,15 @@ async fn test_dbpools_topology_accessors() {
         with_replica.read()
     ));
     assert!(std::ptr::eq(with_replica.primary(), with_replica.write()));
+}
+
+#[cfg(feature = "with-deref")]
+#[tokio::test]
+async fn test_dbpools_deref_returns_primary() {
+    let pools = DbPools::with_replica(lazy_pool(2), lazy_pool(3));
+
+    assert!(std::ptr::eq(&*pools, pools.primary()));
+    assert!(!std::ptr::eq(&*pools, pools.read()));
 }
 
 /// Helper to create a test database and return its pool and name
@@ -111,6 +120,7 @@ async fn execute_dynamic_ddl(
         .await
 }
 
+#[allow(clippy::collapsible_if)]
 fn build_test_url(database: &str) -> String {
     if let Ok(base_url) = std::env::var("DATABASE_URL") {
         if let Ok(mut url) = url::Url::parse(&base_url) {
@@ -142,11 +152,13 @@ async fn test_dbpools_without_replica(pool: PgPool) {
         .unwrap();
     assert_eq!(write_result.0, 2);
 
-    // Deref should also work
+    #[cfg(feature = "with-deref")]
+    // Legacy Deref should also work when explicitly enabled.
     let deref_result: (i32,) = registry_sqlx::query_as("SELECT 3")
         .fetch_one(&*db_pools)
         .await
         .unwrap();
+    #[cfg(feature = "with-deref")]
     assert_eq!(deref_result.0, 3);
 }
 
@@ -188,11 +200,13 @@ async fn test_dbpools_with_replica_routes_correctly(_pool: PgPool) {
         "write() should route to primary"
     );
 
-    // Deref should return primary
+    #[cfg(feature = "with-deref")]
+    // Legacy Deref should return primary when explicitly enabled.
     let deref_marker: (String,) = registry_sqlx::query_as("SELECT name FROM db_marker")
         .fetch_one(&*db_pools)
         .await
         .unwrap();
+    #[cfg(feature = "with-deref")]
     assert_eq!(
         deref_marker.0, primary_name,
         "deref should route to primary"

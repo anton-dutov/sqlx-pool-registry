@@ -18,6 +18,10 @@
 //!   re-exported as [`sqlx`].
 //! - **Named pools (optional)**: Group independent providers by name with the
 //!   `with-named-pools` feature
+//! - **Legacy `Deref` compatibility (optional)**: The `with-deref` feature
+//!   restores `DbPools: Deref<Target = PgPool>` for migrations. It always
+//!   selects the primary pool; use [`PoolProvider::read`] or
+//!   [`PoolProvider::write`] for database queries instead.
 //! - **Test helpers**: [`TestDbPools`] for testing with `#[sqlx::test]`
 //! - **Well-tested**: Comprehensive test suite with replica routing verification
 //!

@@ -43,6 +43,11 @@ jobs:
           unset DATABASE_URL
           cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
 
+      - name: Run offline tests with legacy Deref
+        run: |
+          unset DATABASE_URL
+          cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools,with-deref"
+
   database-test:
     name: Database test (${{ matrix.sqlx_feature }})
     runs-on: ubuntu-latest
@@ -82,7 +87,7 @@ jobs:
       - name: Run database tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/test
-        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- --ignored
+        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools,with-deref" -- --ignored
 
   lint:
     name: Lint (${{ matrix.sqlx_feature }})
@@ -103,7 +108,7 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- -D warnings
+        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools,with-deref" -- -D warnings
 
   msrv:
     name: MSRV (Rust ${{ matrix.rust }}, ${{ matrix.sqlx_feature }})

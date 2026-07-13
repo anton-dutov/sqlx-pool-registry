@@ -46,13 +46,13 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql://postgres:password@localhost:5432/test
-        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- --include-ignored
+        run: cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools,with-deref" -- --include-ignored
 
       - name: Check formatting
         run: cargo fmt -- --check
 
       - name: Run clippy
-        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools" -- -D warnings
+        run: cargo clippy --all-targets --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools,with-deref" -- -D warnings
 
   publish:
     name: Publish to crates.io

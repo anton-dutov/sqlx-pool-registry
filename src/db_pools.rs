@@ -1,3 +1,4 @@
+#[cfg(feature = "with-deref")]
 use std::ops::Deref;
 
 use crate::{provider::PoolProvider, sqlx::PgPool};
@@ -5,8 +6,11 @@ use crate::{provider::PoolProvider, sqlx::PgPool};
 /// Database pool abstraction supporting read replicas.
 ///
 /// Wraps primary and optional replica pools, providing methods for
-/// explicit read/write routing while maintaining backwards compatibility
-/// through `Deref<Target = PgPool>`.
+/// explicit read/write routing.
+///
+/// Use [`PoolProvider::read`] and [`PoolProvider::write`] for every database
+/// query so its routing intent stays explicit. The legacy `Deref<Target =
+/// PgPool>` compatibility path is available only with the `with-deref` feature.
 ///
 /// # Examples
 ///
@@ -185,10 +189,32 @@ impl PoolProvider for DbPools {
     }
 }
 
-/// Dereferences to the primary pool.
+/// Legacy compatibility: dereferences to the primary pool.
 ///
-/// This allows natural usage like `&*pools` when you need a `&PgPool`.
-/// For explicit routing, use `.read()` or `.write()` methods.
+/// This implementation is available only with the `with-deref` feature and
+/// will be removed in the next major version. `&*pools` always selects the
+/// primary pool and bypasses read routing.
+///
+/// For database queries, always use [`PoolProvider::read`] or
+/// [`PoolProvider::write`] instead.
+///
+/// ```rust,no_run
+/// use sqlx_pool_registry::sqlx::{self, PgPool};
+/// use sqlx_pool_registry::{DbPools, PoolProvider};
+///
+/// # async fn example() -> Result<(), sqlx::Error> {
+/// let pools = DbPools::new(PgPool::connect("postgresql://localhost/db").await?);
+///
+/// // Legacy: `.fetch_one(&*pools)` always uses the primary pool.
+/// let _: (i32,) = sqlx::query_as("SELECT 1").fetch_one(pools.read()).await?;
+/// sqlx::query("INSERT INTO users (name) VALUES ('Alice')")
+///     .execute(pools.write())
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+#[cfg(feature = "with-deref")]
+#[cfg_attr(docsrs, doc(cfg(feature = "with-deref")))]
 impl Deref for DbPools {
     type Target = PgPool;
 

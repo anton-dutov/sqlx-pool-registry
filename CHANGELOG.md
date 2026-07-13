@@ -8,6 +8,15 @@ at commit [`bd5dd8a`](https://github.com/doublewordai/sqlx-pool-router/commit/bd
 The upstream changelog is intentionally not duplicated here; entries below
 cover changes made in this crate after the fork.
 
+## Unreleased
+
+### Changed
+
+- Made `DbPools: Deref<Target = PgPool>` an opt-in legacy API behind the
+  `with-deref` feature. It always returns the primary pool, bypasses read
+  routing, and will be removed in the next major version. Use `read()` or
+  `write()` for database queries.
+
 ## [0.2.1]
 
 ### Added
