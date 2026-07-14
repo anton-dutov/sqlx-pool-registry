@@ -12,6 +12,19 @@ use sqlx_pool_registry::{PoolProvider, TestDbPools};
 async fn test_testdbpools_read_pool_rejects_writes(pool: PgPool) {
     let pools = TestDbPools::new(pool).await.unwrap();
 
+    let write_pid: (i32,) = registry_sqlx::query_as("SELECT pg_backend_pid()")
+        .fetch_one(pools.write())
+        .await
+        .expect("Write pool should provide a PostgreSQL connection");
+    let read_pid: (i32,) = registry_sqlx::query_as("SELECT pg_backend_pid()")
+        .fetch_one(pools.read())
+        .await
+        .expect("Read pool should provide a PostgreSQL connection");
+    assert_ne!(
+        write_pid.0, read_pid.0,
+        "TestDbPools read and write pools must use separate connections"
+    );
+
     // Write operations should work on the write pool
     registry_sqlx::query("CREATE TEMP TABLE test_write (id INT)")
         .execute(pools.write())

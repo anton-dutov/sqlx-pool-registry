@@ -11,11 +11,23 @@ env:
 
 jobs:
   offline-test:
-    name: Offline test (${{ matrix.sqlx_feature }})
+    name: Offline test (${{ matrix.sqlx_feature }}, ${{ matrix.named_pools }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        sqlx_feature: [with-sqlx-0_8, with-sqlx-0_9]
+        include:
+          - sqlx_feature: with-sqlx-0_8
+            named_pools: without named pools
+            features: with-sqlx-0_8
+          - sqlx_feature: with-sqlx-0_8
+            named_pools: with named pools
+            features: with-sqlx-0_8,with-named-pools
+          - sqlx_feature: with-sqlx-0_9
+            named_pools: without named pools
+            features: with-sqlx-0_9
+          - sqlx_feature: with-sqlx-0_9
+            named_pools: with named pools
+            features: with-sqlx-0_9,with-named-pools
 
     steps:
       - uses: actions/checkout@v6
@@ -30,23 +42,55 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-offline-${{ matrix.sqlx_feature }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-offline-${{ matrix.features }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
-        run: cargo build --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+        run: cargo build --verbose --no-default-features --features "${{ matrix.features }}"
 
       - name: Check examples
-        run: cargo check --verbose --examples --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+        run: cargo check --verbose --examples --no-default-features --features "${{ matrix.features }}"
 
       - name: Run offline tests without DATABASE_URL
         run: |
           unset DATABASE_URL
-          cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools"
+          cargo test --verbose --no-default-features --features "${{ matrix.features }}"
 
       - name: Run offline tests with legacy Deref
         run: |
           unset DATABASE_URL
-          cargo test --verbose --no-default-features --features "${{ matrix.sqlx_feature }},with-named-pools,with-deref"
+          cargo test --verbose --no-default-features --features "${{ matrix.features }},with-deref"
+
+  feature-validation:
+    name: Feature validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Reject missing SQLx feature
+        shell: bash
+        run: |
+          set +e
+          output="$(cargo check --lib --no-default-features 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          grep --fixed-strings "enable exactly one SQLx feature" <<< "$output"
+
+      - name: Reject multiple SQLx features
+        shell: bash
+        run: |
+          set +e
+          output="$(cargo check --lib --no-default-features --features with-sqlx-0_8,with-sqlx-0_9 2>&1)"
+          status=$?
+          set -e
+          echo "$output"
+          test "$status" -ne 0
+          grep --fixed-strings "mutually exclusive" <<< "$output"
 
   database-test:
     name: Database test (${{ matrix.sqlx_feature }})
