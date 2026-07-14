@@ -4,7 +4,29 @@ All notable changes to `sqlx-pool-registry` are documented in this file.
 
 This project was forked from [`sqlx-pool-router` 0.2.0](https://crates.io/crates/sqlx-pool-router/0.2.0) at commit [`bd5dd8a`](https://github.com/doublewordai/sqlx-pool-router/commit/bd5dd8a049697dfab92fe88a6febb82af96c4800). The upstream changelog is intentionally not duplicated here; entries below cover changes made in this crate after the fork.
 
-## [0.2.1](https://github.com/anton-dutov/sqlx-pool-registry/releases/tag/sqlx-pool-registry-v0.2.1)
+## [0.3.0](https://github.com/anton-dutov/sqlx-pool-registry/compare/sqlx-pool-registry-v0.2.1...sqlx-pool-registry-v0.3.0) (2026-07-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* add generic PoolProvider trait with sqlx-tracing support
+
+### Features
+
+* add generic PoolProvider trait with sqlx-tracing support ([bfb9553](https://github.com/anton-dutov/sqlx-pool-registry/commit/bfb95536267570975e38e37c7c81a370220d9b3b))
+* initial release of sqlx-pool-router ([e7100c1](https://github.com/anton-dutov/sqlx-pool-registry/commit/e7100c18a076a4a67dff34dd23c19a7552b90a57))
+
+## [0.3.0]
+
+### Changed
+
+- Raised the minimum supported Rust version (MSRV) to 1.94.
+- Made `DbPools: Deref<Target = PgPool>` an opt-in legacy API behind the
+  `with-deref` feature. It always returns the primary pool, bypasses read
+  routing, and will be removed in the next major version. Use `read()` or
+  `write()` for database queries.
+
+## [0.2.1]
 
 ### Added
 
