@@ -41,20 +41,14 @@ Exactly one of `with-sqlx-0_8` and `with-sqlx-0_9` must be enabled. The selected
 
 ### Legacy `Deref` migration
 
-`DbPools` does not implement `Deref<Target = PgPool>` by default. To keep an
-existing `&*pools` call compiling while migrating, add `with-deref` to the
-crate features. This is a temporary compatibility path and will be removed in
-the next major version.
+`DbPools` does not implement `Deref<Target = PgPool>` by default. To keep an existing `&*pools` call compiling while migrating, add `with-deref` to the crate features. This is a temporary compatibility path and will be removed in the next major version.
 
-```toml
+``` toml
 [dependencies]
 sqlx-pool-registry = { version = "0.2.1", features = ["with-deref"] }
 ```
 
-`&*pools` always selects the primary pool and bypasses read routing. Do not use
-it for database queries: replace `fetch_one(&*pools)` with `fetch_one(pools.read())`
-for eligible reads or `fetch_one(pools.write())` for writes, locking reads, and
-read-after-write operations.
+`&*pools` always selects the primary pool and bypasses read routing. Do not use it for database queries: replace `fetch_one(&*pools)` with `fetch_one(pools.read())` for eligible reads or `fetch_one(pools.write())` for writes, locking reads, and read-after-write operations.
 
 ## Quick Start
 
@@ -188,11 +182,7 @@ async fn test_repository(pool: PgPool) {
 - Sets `default_transaction_read_only = on` on each read-pool connection
 - PostgreSQL rejects writes to non-temporary tables by default
 
-`TestDbPools` is a testing aid, not a security boundary. PostgreSQL clients can
-override the default for an individual transaction or session, and read-only
-transactions do not prohibit every possible write. See PostgreSQL's
-[`SET TRANSACTION`](https://www.postgresql.org/docs/current/sql-set-transaction.html)
-documentation for the exact restrictions.
+`TestDbPools` is a testing aid, not a security boundary. PostgreSQL clients can override the default for an individual transaction or session, and read-only transactions do not prohibit every possible write. See PostgreSQL's [`SET TRANSACTION`](https://www.postgresql.org/docs/current/sql-set-transaction.html) documentation for the exact restrictions.
 
 ## Generic Programming
 
@@ -254,15 +244,21 @@ Examples: creating records, updates, deletes, transactions
 ## Architecture
 
 ``` text
-┌─────────────┐
-│   DbPools   │
-└──────┬──────┘
-       │
-  ┌────┴────┐
-  ↓         ↓
-┌─────┐  ┌─────────┐
-│Primary│  │ Replica │ (optional)
-└─────┘  └─────────┘
+       ┌─────────────┐
+       │ Named Pools │ (optional)
+       └──────┬──────┘
+              │
+              ▼
+       ┌─────────┐
+       │ DbPools │
+       └────┬────┘
+            │
+       ┌────┴────┐
+       │         │
+       ▼         ▼
+┌─────────┐ ┌─────────┐
+│ Primary │ │ Replica │ (optional)
+└─────────┘ └─────────┘
 ```
 
 ## Real-World Use Cases
