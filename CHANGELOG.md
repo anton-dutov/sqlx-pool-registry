@@ -8,6 +8,18 @@ at commit [`bd5dd8a`](https://github.com/doublewordai/sqlx-pool-router/commit/bd
 The upstream changelog is intentionally not duplicated here; entries below
 cover changes made in this crate after the fork.
 
+## [1.0.0](https://github.com/anton-dutov/sqlx-pool-registry/compare/sqlx-pool-registry-v0.2.0...sqlx-pool-registry-v1.0.0) (2026-07-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* add generic PoolProvider trait with sqlx-tracing support
+
+### Features
+
+* add generic PoolProvider trait with sqlx-tracing support ([bfb9553](https://github.com/anton-dutov/sqlx-pool-registry/commit/bfb95536267570975e38e37c7c81a370220d9b3b))
+* initial release of sqlx-pool-router ([e7100c1](https://github.com/anton-dutov/sqlx-pool-registry/commit/e7100c18a076a4a67dff34dd23c19a7552b90a57))
+
 ## [0.3.0]
 
 ### Changed
